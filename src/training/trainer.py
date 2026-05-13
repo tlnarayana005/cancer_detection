@@ -36,7 +36,14 @@ class Trainer:
         model.summary(print_fn=self.logger.info)
 
         checkpoint_path = self.checkpoint_dir / "best_model.h5"
-        callbacks = self._build_callbacks(checkpoint_path)
+        monitor_metric = self.config["training"].get("monitor_metric", "val_loss")
+        if val_ds is None and monitor_metric.startswith("val_"):
+            self.logger.warning(
+                "No validation dataset found; switching monitor metric to 'loss'."
+            )
+            monitor_metric = "loss"
+
+        callbacks = self._build_callbacks(checkpoint_path, monitor_metric)
 
         self.logger.info("Starting model training")
         history = model.fit(
@@ -59,18 +66,18 @@ class Trainer:
             logger=self.logger,
         )
 
-    def _build_callbacks(self, checkpoint_path: Path):
+    def _build_callbacks(self, checkpoint_path: Path, monitor_metric: str):
         callbacks = [
             tf.keras.callbacks.ModelCheckpoint(
                 filepath=str(checkpoint_path),
-                monitor=self.config["training"].get("monitor_metric", "val_loss"),
+                monitor=monitor_metric,
                 save_best_only=True,
                 save_weights_only=False,
                 verbose=1,
                 mode=self.config["training"].get("mode", "min"),
             ),
             tf.keras.callbacks.EarlyStopping(
-                monitor=self.config["training"].get("monitor_metric", "val_loss"),
+                monitor=monitor_metric,
                 patience=self.config["training"].get("patience", 4),
                 restore_best_weights=True,
                 verbose=1,
